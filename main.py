@@ -13,10 +13,6 @@ def bgr888_to_bgr555(img):
     return img & 0xFC
 
 
-def fuse_bgr(img):
-    return (img[:, :, 2] << 16) | (img[:, :, 1] << 8) | img[:, :, 0]
-
-
 def read_img(name):
     return cv2.imread(name)
 
@@ -33,33 +29,17 @@ def sample(img, count):
 
 
 def guess_colors(data, max_dist, splits):
-    med = np.median(data, axis=0)
-    avg = np.mean(data, axis=0)
-
-    if np.any(np.abs(med - avg) > max_dist):
+    if np.any(np.var(data) > max_dist):
         slices = np.split(data, splits)
         total = []
 
         for s in slices:
-            total += guess_colors(s, max_dist, splits)
+            total += guess_colors(s, max_dist * 0.95, splits * 2)
 
         return total
 
     else:
-        return [med]
-
-
-def fuse_colors(data, dist):
-    ret = []
-    prev = data[0]
-
-    for pixel in data:
-        if np.all(np.abs(pixel - prev) <= dist):
-            ret.append(pixel)
-
-        prev = pixel
-
-    return np.array(ret)
+        return [np.median(data, axis=0)]
 
 
 def main():
@@ -76,7 +56,7 @@ def main():
         rand = sample(img, s**2)
         rand = np.sort(rand, axis=0)
 
-        ret = np.array(guess_colors(rand, 5, 4))
+        ret = np.array(guess_colors(rand, 1500, 4))
         guessed_colors.append(ret)
 
         print('{} -> out{}.png'.format(file, c))
