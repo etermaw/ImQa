@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import sys
 import os
+import multiprocessing as mp
 
 
 def rand_pair(max1, max2, size):
@@ -34,7 +35,7 @@ def guess_colors(data, max_dist, splits):
         total = []
 
         for s in slices:
-            total += guess_colors(s, max_dist * 0.95, splits * 2)
+            total += guess_colors(s, max_dist * 0.85, splits * 2)
 
         return total
 
@@ -42,37 +43,32 @@ def guess_colors(data, max_dist, splits):
         return [np.median(data, axis=0)]
 
 
+def process_image(img):
+    img = bgr888_to_bgr555(img)
+    
+    samp = sample(img, 256**2)
+    samp = np.sort(samp, axis=0)
+
+    colors = np.array(guess_colors(samp, 1500, 4))
+
+    return colors
+
+
 def main():
-    dir = sys.argv[1]
-    c = 0
-    s = 256
+    path = sys.argv[1]
 
-    guessed_colors = []
+    in_data = [read_img(os.path.join(path, file)) for file in os.listdir(path)]
+    pool = mp.Pool(processes=4)
 
-    for file in os.listdir(sys.argv[1]):
-        img = read_img(os.path.join(dir, file))
-        img = bgr888_to_bgr555(img)
+    out_data = pool.map(process_image, in_data)
+    max_len = max([len(x) for x in out_data])
 
-        rand = sample(img, s**2)
-        rand = np.sort(rand, axis=0)
+    for i in range(len(out_data)):
+        l = out_data[i].shape[0]
+        out_data[i] = np.resize(out_data[i], (max_len, 3))
+        out_data[i][l:, :] = 0
 
-        ret = np.array(guess_colors(rand, 1500, 4))
-        guessed_colors.append(ret)
-
-        print('{} -> out{}.png'.format(file, c))
-
-        rand = np.reshape(rand, (s, s, 3))
-        cv2.imwrite('out{}.png'.format(c), rand)
-        c += 1
-
-    max_len = max([len(x) for x in guessed_colors])
-
-    for i in range(len(guessed_colors)):
-        l = guessed_colors[i].shape[0]
-        guessed_colors[i] = np.resize(guessed_colors[i], (max_len, 3))
-        guessed_colors[i][l:, :] = 0
-
-    cv2.imwrite('colors.png', np.array(guessed_colors))
+    cv2.imwrite('colors.png', np.array(out_data))
 
 
 if __name__ == '__main__':
